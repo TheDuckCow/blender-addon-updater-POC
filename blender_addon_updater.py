@@ -41,6 +41,8 @@ https://developer.github.com/v3/
 import bpy
 import os
 import urllib.request
+import zipfile
+import shutil
 from html.parser import HTMLParser
 from bpy.app.handlers import persistent
 
@@ -126,9 +128,9 @@ class updater_check_addon_updates(bpy.types.Operator):
 		print("Download page:",download_link)
 
 		update_status = {'available':True,
-					'link':'https://github.com/TheDuckCow/blender-addon-updater/tags',
-					'type':'py',
-					'name':'Addon & Blender Updater'}
+			'link':'https://github.com/TheDuckCow/blender-addon-updater/releases/',
+			'type':'py',
+			'name':'Addon & Blender Updater'}
 		return update_status
 
 
@@ -160,27 +162,100 @@ class updater_addon_run_update(bpy.types.Operator):
 		# addon_info is now the addon we want to update
 
 		dlink = self.getDownLoadLink(addon["link"])
+
 		# download the repository in whole
 		# as it could be more than a .py
 		# should download in the addon's local folder directory, a temp folder
+		# then unzip, see if __init__ file, and accordingly move files over to
+		# blender addons folder, remove caches, and reload modules.
+		# don't forget to copy current one, pre-updated for backup's sake (and
+		# later check the internal folder for restore addons to recover with)
+
+		# ensure our folder is always "clean"
+		local = os.path.join(os.path.dirname(__file__), "staging")
+		if os.path.isdir(local) == True:
+			shutil.rmtree(local)
+		try:
+			os.makedirs(local)
+		except:
+			print("ERRRROR making staging directory")
+			return {'CANCELLED'}
+
+		print("we here.")
+		urllib.request.urlretrieve(dlink, os.path.join(local,"source.zip"))
+		print("we here?")
+
+		# now unzip and see what's there
+		secure_unzip(os.path.join(local,"source.zip"), os.path.join(local,"source"))
+		# unzipped, but really need to rename it - to drop the tag
+
+		# now try to unload existing addon, move new one to place, remove caches
+		# (or use the install manually)
+		# refresh;
+		# and catch any error popups if possible...
+		# popup saying if anything gos wrong, restart blender
+		# and if still not updated, then use the "restore" button (yet 2b implemented)
 
 
 		return {'FINISHED'}
 
 	def getDownLoadLink(self, link):
-		# we must determine if it is a .py or .zip structure
+		# the following code does website scraping and is very specific to
+		# GitHub. For this hard coded example, we just know it needs to be the
+		# most recent tag link
 
-		# for this hard coded example, we just know it needs to be
-		# the most recent tag link
+		# in the future, a proper repository would bypass this with a real 
+		# html/REST request
 
+		print("Downloading webpage")
 		content = urllib.request.urlopen(link,timeout=100).read().decode('utf-8')
+		print("Proceeding to scrape the website for download link")
 
-		print("#### HTML CONTENT")
-		print(content)
-		print("#### END HTML CONTENT")
+		# scrape for specific, most "recent release"
+		# looking for different "tags" on the download page
+		
+		[base,subLink] = link.split(".com") # should always just be 2
+		subLink = subLink.split("releases")[0]
+		base += ".com"
+		divider = 'href="'+subLink
 
-		return 
+		pre_possible_links = content.split(divider)
+		possible_links = []
+		compiled_source_exists = False
+		for pre in pre_possible_links:
+			possible_links.append(pre.split('"')[0])
+			if "/download/" in possible_links:
+				compiled_source_exists = True
+		possible_links = possible_links[1:]
 
+		print("POSSIBLE LINKS")
+		for a in possible_links:print(a)
+		print("###########")
+
+		# if compiled_source_exists == True:# if specific .zip was included to download
+		# instead of via source code itself (in case repo is not self contained)
+		# else, assume use the tag/download the source folder.
+
+
+		# scraping not quite done, so hack it for now and return the "right answer"
+		final_link = "https://github.com/TheDuckCow/blender-addon-updater/archive/0.0.1.zip"
+
+
+		# once we get the right link, return the download link we want
+		return final_link
+
+
+def secure_unzip(source_filename, dest_dir):
+		with zipfile.ZipFile(source_filename) as zf:
+			for member in zf.infolist():
+				words = member.filename.split(os.path.sep)
+				path = dest_dir
+				for word in words[:-1]:
+					drive, word = os.path.splitdrive(word)
+					head, word = os.path.split(word)
+					if word in (os.curdir, os.pardir, ''): continue
+					path = os.path.join(path, word)
+				zf.extract(member, path)
 
 
 class updater_addon_popup(bpy.types.Operator):
