@@ -1,3 +1,6 @@
+# UPDATE
+Note that this has moved beyond proof of concept and is now [implemented here](https://github.com/CGCookie/blender-addon-updater), used in production by several addons.
+
 # blender-addon-updater
 Proof of concept for a blender 3d addon that automatically detects and installs other addon updates.
 
